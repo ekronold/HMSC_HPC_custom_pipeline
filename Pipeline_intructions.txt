@@ -17,7 +17,7 @@ All the output from the shell script is designed for flexible post-processing in
 
 Design the model in local R, fitting process does not differ from normal HMSC fitting
 
-Shell scripts are currently written for Olivia implementation, not Saga so some SBATCH arguments may need adjustment
+Shell scripts are currently written for Olivia implementation not Saga so some SBATCH arguments may need adjustment for calling Saga GPUs correctly
 
 Make sure for all R scripts that you either have a R package library yourself or can route the R scripts into an appropriate library directory
 
@@ -195,31 +195,11 @@ NOT FUNCTIONAL IN THE CURRENT STATE
 
 
 
+##### HPC Workflow is complete ######
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# Following this workflow should leave you with several list and csv objects that can be further evaluated in R locally
+# Every parameter estimate is output complete with the corresponding posterior probabilities
+# Format of the lists should be easy to insert into any normal model evaluation and visualisation workflow in R
 
 
 
