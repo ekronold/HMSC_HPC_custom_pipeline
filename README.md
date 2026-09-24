@@ -5,3 +5,6 @@ Container with all the software to run HMSC-HPC models following the initial Scr
 hmsc-hpc-aarch64_0.1.8.sif
 
 and has a DOI at Zenodo: https://doi.org/10.5281/zenodo.20664829
+
+
+Example scripts for post-processing in R will follow soon
