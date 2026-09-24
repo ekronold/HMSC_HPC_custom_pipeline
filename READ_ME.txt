@@ -1,0 +1,227 @@
+### INSTRUCTIONS FOR RUNNING HMSC-HPC MODELS FITTED ON OLIVIA/ SAGA GPUs
+
+###
+The entire process follow the instructions by Otso Ovaskainen and Berea Abrego in the book:
+Joint Species Distribution Modelling With Applications in R, 2020, https://doi.org/10.1017/9781108591720
+
+Elements in the model fitting are adapted for HPC-structure following 
+"Accelerating joint species distribution modelling with Hmsc-HPC by GPU porting", Rahman et al, 2024, https://doi.org/10.1371/journal.pcbi.1011914
+
+Github page for HMSC (both R and HPC versions): https://github.com/hmsc-r
+
+### Short summary:
+Pipeline scripts assume than an unfitted model object has been exported to the cluster
+It is worth noting that all script are applying the various functions in their default form
+There is room for more appropriate usage of the base functions to account for e.g., nested structures and random effects or other adjustments
+All the output from the shell script is designed for flexible post-processing in R
+
+Design the model in local R, fitting process does not differ from normal HMSC fitting
+
+Shell scripts are currently written for Olivia implementation, not Saga so some SBATCH arguments may need adjustment
+
+Make sure for all R scripts that you either have a R package library yourself or can route the R scripts into an appropriate library directory
+
+All the software required (except for R) is contained in the hmsc-hpc-aarch64_0.1.8.sif container, run through apptainer 
+
+Script_01_Fit_model.sh <-> This script will take the unfitted model object and perform the MCMC-sampling adapted for GPUs and has no other dependencies aside from the container that must be activated
+
+Script_02_Evaluate_convergence.sh <-> Shell script executing the R dependency script for checking model convergence
+Evaluate_convergence.R <-> Evaluates the convergence of the MCMC-chains for each parameter and saves them as both .rds summary objects that can be loaded later for investigation and as a .pdf plots for direct visual inspection
+
+Script_03_Evaluate_fit.sh <-> Currently inactive. This script would evaluate the model fit through cross-validation but this requires the full model to be fitted on subsets of data several times. This model fitting currently does not have an HPC-functionality so cannot be used as intended. 
+
+Script_04_Parameter_estimates.sh <-> Shell script executing the R dependency script for extracting parameter estimates
+Parameter_estimates.R <-> R script that will extract the relevant parameters from your fitted model and save them as .rds objects
+
+Script_05_Variation_partitioning.sh <-> Shell script which will execute the R dependency script for variation partitioning
+Variation_partitioning.R <-> Preforms variation partitioning following the basic method presented by the authors, saves and object where values can be easily extracted
+
+Script_06_make_predictions.sh <-> Shell script to execute the R dependency script for extracting predicted values in the model
+Make_predictions.R <-> R script for making predictions based on the fitted model. Contains a custom function adapted from the plotGradient() function in Hmsc
+
+
+### Detailed instructions:
+
+
+########### LOCAL R   #####################
+
+
+R Fitting and exporting instructions, this is adapted from the HMSC tutorials made by Otso Ovaskainen
+# Here instructions are given at generic level, the details will depend on the model
+
+# Organize the community data in the matrix Y
+
+# Organize the environmental data into a dataframe XData
+# Define the environmental model through XFormula
+# XFormula = ~ ...
+
+# Organize the trait data into a dataframe TrData
+# Define the trait model through TrFormula
+# TrFormula = ~ ..
+
+# Set up a phylogenetic (or taxonomic tree) as myTree
+# Many ways to do this, the most simple for DNA data is to use a equal branch length taxonomic tree
+# If many OTUs, this is where the model really slows down and potentially crashes the memory
+
+# Define the studyDesign as a dataframe 
+# For example, if you have sampled the same locations over multiple years, you may define
+# studyDesign = data.frame(sample = ..., year = ..., location = ...)
+
+# Set up the random effects
+# For example, you may define year as an unstructured random effect
+# rL.year = HmscRandomLevel(units = levels(studyDesign$year))
+# For another example, you may define location as a spatial random effect
+# rL.location = HmscRandomLevel(sData = locations.xy)
+# Here locations.xy would be a matrix (one row per unique location)
+# where row names are the levels of studyDesign$location,
+# and the columns are the xy-coordinates
+# For another example, you may define the sample = sampling unit = row of matrix Y
+# as a random effect, in case you are interested in co-occurrences at that level
+# rL.sample = HmscRandomLevel(units = levels(studyDesign$sample))
+
+# Use the Hmsc model constructor to define a model
+
+# m = Hmsc(Y=Y,
+#          distr="probit",
+#          XData = XData,  XFormula=XFormula,
+#          TrData = TrData, TrFormula = TrFormula,
+#          phyloTree = myTree,
+#          studyDesign = studyDesign, 
+#          ranLevels=list(year=rL.year, location = rL.location, sample = rL.sample))
+
+# note that in the random effects the left-hand sides in the list (year, location, sample)
+# refer to the columns of the studyDesign
+
+# Once defined, test that the model runs using the sampleMcmc() function:
+sampleMcmc(m,samples=2)
+
+# Important next step for exporting to HPC, create an initialised model that is supplied to the gibbs_sampler:
+# init_obj = sampleMcmc(m, samples=, 
+			   thin=,
+                           transient=, 
+		    	   nChains=,
+                           verbose=1000, 
+		   	   nParallel = [set same value as nChains],
+                       engine="HPC")
+
+# Save this init_obj and export to the HPC cluster of choice. Can be fit with either CPU or GPU depending on system. Large models should be fit on GPUs
+
+
+
+########### HPC Workflow ############################
+
+########### SCRIPT 01 Fit model #####################
+
+# The container image file (hmsc-hpc-aarch64_0.1.8.sif) needs to be placed in the same folder as your model when running this script
+# If running this in SAGA instead of OLIVIA, check that the SBATCH lines for calling GPU computing are appropriate
+# Script is currently deigned for 5 MCMC chains and works well with 200 samples in each
+# Depending on the size of your data the MCMC-chain files may become very large and the script struggles to save them in the right format
+# Each chain is run in parallell on separate GPUs, increase or decrease number of GPUs using the 'SBATCH --array' argument
+# Important that the number of samples, thin, transient in the gibbs_sampler, and the number of chains are identical to the settings in the R-model
+
+# Script outputs fitted MCMC chains for downstream analysis
+# Large model fits in about 1 hour 30 minutes
+
+
+########### SCRIPT 02 Evaluate convergence #####################
+
+# This script has an R dependency. Shell script simply executes the R-script
+# The R script starts by loading the MCMC-chains and combining them to a fitted model object
+# The fitted model object is saved and can be loaded in later scripts directly
+# Make sure that setting in the importPosteriorFromHPC() function match the initial model settings
+# Large models with many speciesXparameter estimates become increasingly difficult to evaluate
+# output files also become very large as the chain convergence is printer for each combination of responseXpredictor 
+# each summary object is also saved as either an .rds or a .csv file so if you need to investigate the convergence for a specific interaction that is possible
+# The gelman diagnostics for Beta is estimated for a subset of the estimates
+# The Omega convergence is evaluated separately at the end starting later in the chains and is thinned simply due to the computational demand
+# For smaller models these can be changed to fit the capacity
+
+# Script outputs diagnostic plots a pdf files, csv files with the values plotted in the pdf files and summary objects as .rds files that can be loaded in R
+# Large model requires close to 4 hours to complete, 450GB memory required
+
+
+########### SCRIPT 03 Evaluate model fit #####################
+
+NOT FUNCTIONAL IN THE CURRENT STATE
+
+
+
+########### SCRIPT 04 Parameter estimates #####################
+
+# This script has an R dependency. Shell script simply executes the R-script
+# Loads the fitted model object from Script_02
+# The R script simple executes the base Hmsc commands for extracting the parameter estimates
+# Currently extract parameters for:
+	Beta 	- Species X Predictor estimates
+	Gamma 	- Trait X Predictor estimates
+	Lambda 	- Species response to latent factor, can be estimated for each random level
+	Eta 	- Site scores in the latent variables, can also be estimated for each random level
+# Not included in the base script but can be added when part of the model: Rho, phylogenetic structure
+# Omega correlation is estimated differently due to computational limits, Omega = Species X Species residual variation
+# Has a thinning factor which means that the values are estimated only for every X sample along the fitted chains
+# Computes species-species associations at each random level
+
+# Script outputs one list with all the post-estimates for the four selected parameters and one omega_correlations.rds object
+# Large model requires close to 2 hours to complete, 425GB memory required
+	
+
+########### SCRIPT 05 Variation partitioning #####################
+
+# This script has an R dependency. Shell script simply executes the R-script
+# This script simply preforms variation partitioning following the basic HMSC method
+# The main functions are: 
+	computePredictedValues() in the basic usage computed predicted values for the Y-data
+	computeVariancePartitioning() which can be adjusted for groups of variables. Resulting object also contains partitions for traits
+# basic function evaluateModelFit() is used to generate R2 values that can be used to order the values from variation partitioning
+
+# Script outputs the result of computeVariationPartitioning() as an .rds file and one .csv file with the variation partition for each predictor and species with their corresponding R2 value for easy plotting
+# Large model requires 2.5 hours to complete, 365GB memory required
+
+
+########### SCRIPT 06 Make predictions #####################
+
+# This script has an R dependency. Shell script simply executes the R-script
+# This is a heavily modified script from base Hmsc functionality
+# The R script contains a modified version of the hmsc function plotGradient() which is sued to plot the a predicted response (species, trait) to a predictor
+# The base function ONLY produces the plot and does not retain the values anywhere
+# The custom function gradientData() is based on plotGradient() but instead of generating a plot it generates a data.frame with the estimated response
+# The full R script takes this a step further and for each response (every species and every trait) it generates a list of dataframes with the response to every predictor
+# Predictions are made both with keeping every other predictor at the mean value (normal predictions) and marginally be setting each non-focal predictor to the expected value depending on the focal predictor
+# The prediction gradients are generated through the base hmsc function constructGradient() which can be tuned in many ways, see documentation
+
+# Script outputs six lists as .rds objects, each list contains the predicted values for every response against every predictor. 
+# 2 lists each for total response (richness changes, marginal and basic), trait responses (marginal and basic) and species responses (marginal and basic)
+# Large model requires 1.5 hours to complete, 365GB memory required
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

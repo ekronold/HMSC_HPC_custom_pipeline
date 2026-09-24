@@ -1,0 +1,21 @@
+#!/bin/bash
+#SBATCH --job-name=Parameter_estimates_HMSC_model
+#SBATCH --account=nn9725k
+#SBATCH --time=06:00:00
+#SBATCH --mem-per-cpu=24G
+#SBATCH --nodes=1
+#SBATCH --partition=accel
+#SBATCH --gpus=1
+
+
+## Set up job environment:
+set -o errexit  # Exit the script on any error
+set -o nounset  # Treat any unset variables as an error
+
+module purge
+
+module load NRIS/GPU
+module load R/4.4.2-gfbf-2024a
+
+
+R < Evaluate_fit.R --no-save
