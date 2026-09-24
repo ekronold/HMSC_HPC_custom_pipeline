@@ -19,6 +19,19 @@ Design the model in local R, fitting process does not differ from normal HMSC fi
 
 Shell scripts are currently written for Olivia implementation not Saga so some SBATCH arguments may need adjustment for calling Saga GPUs correctly
 
+# Example of running parallell chains on Saga:
+#!/bin/bash
+#SBATCH --job-name=TestHMSC_GPU_params
+#SBATCH --account=nn9338k
+#SBATCH --time=00:30:00
+#SBATCH --mem-per-cpu=16G
+#SBATCH --cpus-per-task=4
+#SBATCH --partition=accel
+#SBATCH --ntasks=1
+#SBATCH --gpus-per-task=4
+#SBATCH --array=0-3
+
+
 Make sure for all R scripts that you either have a R package library yourself or can route the R scripts into an appropriate library directory
 
 All the software required (except for R) is contained in the hmsc-hpc-aarch64_0.1.8.sif container, run through apptainer 
