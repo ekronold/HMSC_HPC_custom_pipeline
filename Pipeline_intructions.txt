@@ -155,8 +155,9 @@ sampleMcmc(m,samples=2)
 
 ########### SCRIPT 03 Evaluate model fit #####################
 
-NOT FUNCTIONAL IN THE CURRENT STATE
-
+# For larger models this simply compared the fitted values with the actual values and prints a summary 
+# containing various descriptors of how well the model is fit to the data
+# Output depends on the model, i.e. a normal model fit on scaled abundances will give different estimates than a probit model fit on 0/1 data
 
 
 ########### SCRIPT 04 Parameter estimates #####################
