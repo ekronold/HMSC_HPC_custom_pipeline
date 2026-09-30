@@ -14,16 +14,27 @@ set.seed(666) # Remember to set seed
 m <- readRDS("fitted_m.rds")
 
 
-# Genera post estimates for visualization
+# Genera post estimates for visualization, check that only estimates that are included in the model is called. 
+# For example, Sigma and Alpha are only estimated in spatial models, Rho is estimated in models with a phylogenetic component
+# Calling a parameter that is not estimated throws and error and exits the script
+
 postBeta <- getPostEstimate(m, "Beta")
 postGamma <- getPostEstimate(m, "Gamma")
 etaPost <- getPostEstimate(m, "Eta")
 lambdaPost <- getPostEstimate(m, "Lambda")
+alphaPost <- getPostEstimate(m, "Alpha")
+sigmaPost <- getPostEstimate(m, "Sigma")
+#rhoPost <- getPostEstimate(m, "Rho")
+omegaPost <- getPostEstimate(m, "Omega", thin = 5, start = 100) # Omega is often very computationally intensive, thin and start later in the chain
 
-Post_estimates <- list("postBeta" = postBeta,
-		       "postGamma" = postGamma,
-		       "postEta" = etaPost,
-		       "postLambda" = lambdaPost)
+# Include the post estimates you want it this list
+Post_estimates <- list( "postBeta" = postBeta,
+                        "postGamma" = postGamma,
+                        "postEta" = etaPost,
+                        "postLambda" = lambdaPost,
+                        "postSigma" = sigmaPost,
+                        "postAlpha" = alphaPost
+                        "postOmega" = omegaPost)
 
 saveRDS(Post_estimates, "Post_estimates.rds")
 
